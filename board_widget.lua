@@ -64,7 +64,7 @@ function BackgammonBoardWidget:init()
         Tap = {
             GestureRange:new{
                 ges   = "tap",
-                range = Geom:new{ x = 0, y = 0, w = 3000, h = 3000 },
+                range = function() return self.paint_rect end,
             },
         },
     }
