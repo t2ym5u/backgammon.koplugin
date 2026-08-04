@@ -89,6 +89,8 @@ function BackgammonScreen:buildLayout()
         self.board_widget,
     }
 
+    self.status_text:setMaxWidth(board_frame:getSize().w)
+
     local roll_button = ButtonTable:new{
         width = math.floor(sw * 0.6),
         shrink_unneeded_width = true,
