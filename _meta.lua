@@ -1,7 +1,7 @@
 local _ = require("gettext")
 
 return {
-    version     = "1.0.9",
+    version     = "1.0.10",
     fullname    = _("Backgammon"),
     description = _("Classic 2-player dice and checker race game."),
 }
