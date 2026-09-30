@@ -16,7 +16,9 @@ The classic 2-player dice-and-checker race game, played pass-and-play on a singl
 
 ## Features
 
-- **Full move validation** — legal moves only, including forced bar re-entry and doubles
+- **Computer opponent** — optional, plays Black; enumerates every legal sequence the dice allow and scores the position each one leaves
+- **Opening roll** — each side rolls one die, the higher starts
+- **Full move validation** — legal moves only, including forced bar re-entry, doubles, and the obligation to use as many dice as possible (the higher one when only one can be played)
 - **Automatic turn passing** — when a roll has no legal move
 - **Auto-save** — in-progress game restored on next launch
 

@@ -11,4 +11,11 @@ return {
     ["Rolled %1-%2."] = { fr = "%1-%2 obtenu.", es = "%1-%2 obtenido.", de = "%1-%2 gewürfelt." },
     ["White"] = { fr = "Blanc", es = "Blancas", de = "Weiß" },
     ["You must enter from the bar first."] = { fr = "Vous devez d'abord entrer depuis la barre.", es = "Debes entrar desde la barra primero.", de = "Du musst zuerst von der Bar einsetzen." },
+
+    -- Solo mode (screen.lua)
+    ["Opponent: Computer"] = { fr = "Adversaire : ordinateur", es = "Rival: ordenador", de = "Gegner: Computer" },
+    ["Opponent: Human"] = { fr = "Adversaire : humain", es = "Rival: humano", de = "Gegner: Mensch" },
+    ["The computer now plays Black."] = { fr = "L'ordinateur joue désormais les Noirs.", es = "El ordenador juega ahora con negras.", de = "Der Computer spielt jetzt Schwarz." },
+    ["Two players on one device."] = { fr = "Deux joueurs sur le même appareil.", es = "Dos jugadores en el mismo dispositivo.", de = "Zwei Spieler auf einem Gerät." },
+    ["Computer rolled %1-%2."] = { fr = "L'ordinateur a fait %1-%2.", es = "El ordenador sacó %1-%2.", de = "Der Computer würfelte %1-%2." },
 }
