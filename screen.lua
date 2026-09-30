@@ -7,6 +7,7 @@ local function lrequire(name)
     return package.loaded[key]
 end
 
+local ButtonDialog    = require("ui/widget/buttondialog")
 local ButtonTable     = require("ui/widget/buttontable")
 local Device          = require("device")
 local FrameContainer  = require("ui/widget/container/framecontainer")
@@ -33,7 +34,7 @@ White moves from point 24 toward point 1; Black moves from point 1 toward point 
 
 A point with a single opposing checker (a blot) can be hit, sending it to the bar. A checker on the bar must re-enter the board before any other move. Once all 15 of your checkers are in your home board, you may bear them off.
 
-A computer opponent is available from the options menu (it plays Black); otherwise two players share the device. Each side rolls one die to open and the higher starts. A turn must use as many dice as it legally can, and when only one of the two can be played it must be the higher. This version still has no doubling cube.
+A computer opponent is available from the options menu (it plays Black); otherwise two players share the device. Each side rolls one die to open and the higher starts. A turn must use as many dice as it legally can, and when only one of the two can be played it must be the higher. The doubling cube is available before rolling: accepting doubles the stake and passes the cube, declining ends the game at the stake before it.
 ]])
 
 local GAME_RULES_FR = [[
@@ -43,7 +44,7 @@ Les Blancs vont du point 24 vers le point 1 ; les Noirs vont du point 1 vers le 
 
 Un point occupé par un seul pion adverse (isolé) peut être pris, l'envoyant sur la barre. Un pion sur la barre doit rentrer avant tout autre déplacement. Une fois vos 15 pions dans votre jan intérieur, vous pouvez les sortir.
 
-Un adversaire informatique est disponible depuis le menu des options (il joue les Noirs) ; sinon deux joueurs partagent l'appareil. Chaque camp lance un dé pour l'ouverture, le plus fort commence. Un tour doit utiliser autant de dés qu'il le peut légalement, et quand un seul des deux est jouable, ce doit être le plus grand. Cette version reste sans cube de doublement.
+Un adversaire informatique est disponible depuis le menu des options (il joue les Noirs) ; sinon deux joueurs partagent l'appareil. Chaque camp lance un dé pour l'ouverture, le plus fort commence. Un tour doit utiliser autant de dés qu'il le peut légalement, et quand un seul des deux est jouable, ce doit être le plus grand. Le videau est disponible avant de lancer : accepter double l'enjeu et transmet le videau, refuser met fin à la partie à l'enjeu d'avant.
 ]]
 
 local BackgammonScreen = ScreenBase:extend{}
@@ -166,6 +167,7 @@ function BackgammonScreen:buildLayout()
         shrink_unneeded_width = true,
         buttons = {{
             { text = _("Roll dice"), callback = function() self:onRoll() end },
+            { id = "double_btn", text = _("Double"), callback = function() self:onDouble() end },
         }},
     }
 
@@ -179,6 +181,75 @@ function BackgammonScreen:buildLayout()
     }
     self:buildPortraitLayout(title_bar, content, nil)
     self:updateStatus()
+end
+
+-- ---------------------------------------------------------------------------
+-- Doubling cube
+-- ---------------------------------------------------------------------------
+
+function BackgammonScreen:onDouble()
+    local board = self.board
+    if board.status ~= "playing" then return end
+    if not board:canDouble() then
+        if #board.remaining_dice > 0 then
+            self:updateStatus(_("Double before rolling, not after."))
+        elseif board.cube_owner and board.cube_owner ~= board.turn then
+            self:updateStatus(_("Your opponent owns the cube."))
+        else
+            self:updateStatus(_("The cube is already at its maximum."))
+        end
+        return
+    end
+
+    local offerer = board.turn
+    board:offerDouble(offerer)
+    local stake = board.cube_value * 2
+    local label = (offerer == "white") and _("White") or _("Black")
+
+    -- Against the computer there is nobody to hand the dialog to: it answers.
+    -- The rule is the simplest sound one -- take unless clearly behind in the
+    -- race -- which is roughly right and never absurd. A player more than a
+    -- quarter behind on pips is losing badly enough to drop.
+    if self:isSolo() and offerer ~= AI_COLOR then
+        local mine  = board:pipCount(AI_COLOR)
+        local yours = board:pipCount(offerer)
+        if mine > yours * 1.25 then
+            board:declineDouble()
+            self.plugin:saveState(self:serializeState())
+            self:updateStatus()
+            self:showMessage(T(_("The computer declines. %1 wins %2 point(s)."),
+                               label, board:stake()), 4)
+        else
+            board:acceptDouble()
+            self.plugin:saveState(self:serializeState())
+            self:updateStatus(T(_("The computer accepts. Stake is now %1."), board.cube_value))
+        end
+        return
+    end
+
+    -- The answer is the opponent's, so it is asked outright rather than left
+    -- as another button on a shared board.
+    local dlg
+    dlg = ButtonDialog:new{
+        title   = T(_("%1 offers to double the stake to %2."), label, stake),
+        buttons = {{
+            { text = _("Accept"), callback = function()
+                UIManager:close(dlg)
+                board:acceptDouble()
+                self.plugin:saveState(self:serializeState())
+                self:updateStatus(T(_("Double accepted. Stake is now %1."), board.cube_value))
+                self:maybeRunAI()
+            end },
+            { text = _("Decline"), callback = function()
+                UIManager:close(dlg)
+                board:declineDouble()
+                self.plugin:saveState(self:serializeState())
+                self:updateStatus()
+                self:showMessage(T(_("%1 wins %2 point(s)."), label, board:stake()), 4)
+            end },
+        }},
+    }
+    UIManager:show(dlg)
 end
 
 function BackgammonScreen:onRoll()
@@ -290,15 +361,16 @@ function BackgammonScreen:updateStatus(msg)
         status = msg
     elseif self.board.status == "ended" then
         local winner_label = self.board.winner == "white" and _("White") or _("Black")
-        status = T(_("%1 wins!"), winner_label)
+        status = T(_("%1 wins %2 point(s)!"), winner_label, self.board:stake())
     else
         local turn_label = self.board.turn == "white" and _("White") or _("Black")
+        local cube = self.board.cube_value or 1
         if #self.board.remaining_dice > 0 then
-            status = T(_("%1 to play  Dice: %2"),
-                turn_label, table.concat(self.board.remaining_dice, ","))
+            status = T(_("%1 to play  Dice: %2  Stake: %3"),
+                turn_label, table.concat(self.board.remaining_dice, ","), cube)
         else
-            status = T(_("%1 to play  Off W:%2 B:%3"),
-                turn_label, self.board.off.white, self.board.off.black)
+            status = T(_("%1 to play  Off W:%2 B:%3  Stake: %4"),
+                turn_label, self.board.off.white, self.board.off.black, cube)
         end
     end
     ScreenBase.updateStatus(self, status)

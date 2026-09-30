@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [1.2.0] - 2026-09-30
 
 ### Added
+- **Doubling cube**, the last thing the README admitted was missing. Offered
+  before rolling by whoever owns the cube (either player while it sits in the
+  middle); accepting doubles the stake and hands the cube to the accepter, who
+  alone may redouble; declining ends the game at the stake *before* the refused
+  double, which is the whole point of the cube -- it lets a player bank a win
+  rather than play it out. Capped at 64.
+- Games are now scored rather than just won: the stake doubles for a gammon
+  (the loser bore nothing off) and triples for a backgammon (and still had a
+  checker on the bar or in the winner's home board).
+- Against the computer there is nobody to hand the offer to, so it answers
+  itself: it takes unless it is more than a quarter behind on the pip count.
+  Simple, roughly right, and never absurd.
+
+### Note
+- The computer never offers a double of its own. Declining to double is never
+  a blunder that loses a game, whereas offering badly is, and a sound doubling
+  policy needs equity estimates this engine does not have.
+
+## [1.2.0] - 2026-09-30
+
+### Added
 - **Computer opponent.** A turn in backgammon is a whole sequence of moves,
   not one move, so the engine enumerates every legal sequence the dice allow
   and scores the position each leaves behind — race position, made points and
