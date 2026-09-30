@@ -33,17 +33,17 @@ White moves from point 24 toward point 1; Black moves from point 1 toward point 
 
 A point with a single opposing checker (a blot) can be hit, sending it to the bar. A checker on the bar must re-enter the board before any other move. Once all 15 of your checkers are in your home board, you may bear them off.
 
-This version is 2-player only (no AI), has no doubling cube, White always moves first, and does not enforce using both dice if only one has a legal play.
+A computer opponent is available from the options menu (it plays Black); otherwise two players share the device. Each side rolls one die to open and the higher starts. A turn must use as many dice as it legally can, and when only one of the two can be played it must be the higher. This version still has no doubling cube.
 ]])
 
 local GAME_RULES_FR = [[
-Backgammon — Règles (2 joueurs, tour par tour)
+Backgammon — Règles
 
 Les Blancs vont du point 24 vers le point 1 ; les Noirs vont du point 1 vers le point 24. Lancez les dés, puis touchez un pion pour le sélectionner et touchez une destination pour le déplacer. Un double donne 4 déplacements au lieu de 2.
 
 Un point occupé par un seul pion adverse (isolé) peut être pris, l'envoyant sur la barre. Un pion sur la barre doit rentrer avant tout autre déplacement. Une fois vos 15 pions dans votre jan intérieur, vous pouvez les sortir.
 
-Cette version est à 2 joueurs uniquement (pas d'IA), sans cube de doublement, les Blancs commencent toujours, et n'impose pas d'utiliser les deux dés si un seul a un coup légal.
+Un adversaire informatique est disponible depuis le menu des options (il joue les Noirs) ; sinon deux joueurs partagent l'appareil. Chaque camp lance un dé pour l'ouverture, le plus fort commence. Un tour doit utiliser autant de dés qu'il le peut légalement, et quand un seul des deux est jouable, ce doit être le plus grand. Cette version reste sans cube de doublement.
 ]]
 
 local BackgammonScreen = ScreenBase:extend{}
@@ -53,8 +53,77 @@ function BackgammonScreen:init()
     self.board = BackgammonBoard:new()
     if not self.board:load(state) then
         self.board:reset()
+    self.board:rollOpening()
     end
     ScreenBase.init(self)
+end
+
+-- ---------------------------------------------------------------------------
+-- Opponent
+--
+-- The AI always plays Black, so a solo player keeps the opening roll's verdict
+-- rather than being handed a colour. Its whole turn is computed at once (see
+-- board:getAITurn) and then applied move by move, with a pause between each so
+-- the checkers can be seen travelling instead of teleporting.
+-- ---------------------------------------------------------------------------
+
+local AI_COLOR       = "black"
+local AI_MOVE_DELAY  = 0.45   -- seconds between the AI's individual moves
+
+function BackgammonScreen:isSolo()
+    return self.plugin:getSetting("opponent", "human") == "ai"
+end
+
+function BackgammonScreen:getOpponentButtonText()
+    return self:isSolo() and _("Opponent: Computer") or _("Opponent: Human")
+end
+
+function BackgammonScreen:toggleOpponent()
+    self.plugin:saveSetting("opponent", self:isSolo() and "human" or "ai")
+    self:updateStatus(self:isSolo()
+        and _("The computer now plays Black.")
+        or  _("Two players on one device."))
+    self:maybeRunAI()
+end
+
+function BackgammonScreen:maybeRunAI()
+    local board = self.board
+    if not self:isSolo() then return end
+    if board.status ~= "playing" or board.turn ~= AI_COLOR then return end
+    if self.ai_thinking then return end
+    self.ai_thinking = true
+
+    UIManager:scheduleIn(AI_MOVE_DELAY, function()
+        if board.status ~= "playing" or board.turn ~= AI_COLOR then
+            self.ai_thinking = false
+            return
+        end
+        if #board.remaining_dice == 0 then
+            local dice = board:rollDice()
+            self.board_widget:refresh()
+            if dice then
+                self:updateStatus(T(_("Computer rolled %1-%2."), dice[1], dice[2]))
+            end
+            self.ai_thinking = false
+            self:maybeRunAI()
+            return
+        end
+
+        local turn = board:getAITurn()
+        if #turn == 0 then
+            board:endTurn()
+        else
+            -- Apply only the first move here and come back for the rest, so
+            -- each one gets its own refresh.
+            local mv = turn[1]
+            if board:applyMove(mv.from, mv.die) == "invalid" then board:endTurn() end
+        end
+        self.board_widget:refresh()
+        self.plugin:saveState(self.board:serialize())
+        self:updateStatus()
+        self.ai_thinking = false
+        self:maybeRunAI()
+    end)
 end
 
 function BackgammonScreen:serializeState()
@@ -69,6 +138,7 @@ function BackgammonScreen:buildLayout()
     local title_bar = self:buildTitleBar(_("Backgammon"), function()
         return {
             { text = _("New game"), callback = function() self:onNewGame() end },
+            { text = self:getOpponentButtonText(), callback = function() self:toggleOpponent() end },
             self:makeRulesButtonConfig(GAME_RULES_EN, GAME_RULES_FR),
         }
     end)
@@ -127,6 +197,7 @@ function BackgammonScreen:onRoll()
         return
     elseif #board.remaining_dice == 0 then
         self:updateStatus(T(_("Rolled %1-%2 -- no legal moves, turn passed."), dice[1], dice[2]))
+        self:maybeRunAI()
     else
         self:updateStatus(T(_("Rolled %1-%2."), dice[1], dice[2]))
     end
@@ -198,6 +269,7 @@ function BackgammonScreen:onCellAction(zone)
         self:showMessage(T(_("%1 wins!"), winner_label), 4)
     elseif result == "turn_ended" then
         self:updateStatus(_("No more legal moves -- turn passed."))
+        self:maybeRunAI()
     else
         self:updateStatus()
     end
@@ -205,9 +277,11 @@ end
 
 function BackgammonScreen:onNewGame()
     self.board:reset()
+    self.board:rollOpening()
     self.plugin:saveState(self.board:serialize())
     self:buildLayout()
     UIManager:setDirty(self, function() return "ui", self.dimen end)
+    self:maybeRunAI()
 end
 
 function BackgammonScreen:updateStatus(msg)
