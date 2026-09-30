@@ -18,4 +18,20 @@ return {
     ["The computer now plays Black."] = { fr = "L'ordinateur joue désormais les Noirs.", es = "El ordenador juega ahora con negras.", de = "Der Computer spielt jetzt Schwarz." },
     ["Two players on one device."] = { fr = "Deux joueurs sur le même appareil.", es = "Dos jugadores en el mismo dispositivo.", de = "Zwei Spieler auf einem Gerät." },
     ["Computer rolled %1-%2."] = { fr = "L'ordinateur a fait %1-%2.", es = "El ordenador sacó %1-%2.", de = "Der Computer würfelte %1-%2." },
+
+    -- Doubling cube (screen.lua :onDouble)
+    ["Double"] = { fr = "Doubler", es = "Doblar", de = "Verdoppeln" },
+    ["Accept"] = { fr = "Accepter", es = "Aceptar", de = "Annehmen" },
+    ["Decline"] = { fr = "Refuser", es = "Rechazar", de = "Ablehnen" },
+    ["Double before rolling, not after."] = { fr = "On double avant de lancer, pas après.", es = "Se dobla antes de tirar, no después.", de = "Verdoppelt wird vor dem Wurf, nicht danach." },
+    ["Your opponent owns the cube."] = { fr = "Le videau appartient à votre adversaire.", es = "El cubo es de tu rival.", de = "Der Dopplerwürfel gehört Ihrem Gegner." },
+    ["The cube is already at its maximum."] = { fr = "Le videau est déjà à son maximum.", es = "El cubo ya está al máximo.", de = "Der Dopplerwürfel ist bereits am Maximum." },
+    ["%1 offers to double the stake to %2."] = { fr = "%1 propose de doubler l'enjeu à %2.", es = "%1 propone doblar la apuesta a %2.", de = "%1 bietet an, den Einsatz auf %2 zu verdoppeln." },
+    ["Double accepted. Stake is now %1."] = { fr = "Doublement accepté. L'enjeu est maintenant de %1.", es = "Doblaje aceptado. La apuesta es ahora %1.", de = "Verdopplung angenommen. Der Einsatz beträgt jetzt %1." },
+    ["The computer accepts. Stake is now %1."] = { fr = "L'ordinateur accepte. L'enjeu est maintenant de %1.", es = "El ordenador acepta. La apuesta es ahora %1.", de = "Der Computer nimmt an. Der Einsatz beträgt jetzt %1." },
+    ["The computer declines. %1 wins %2 point(s)."] = { fr = "L'ordinateur refuse. %1 gagne %2 point(s).", es = "El ordenador rechaza. %1 gana %2 punto(s).", de = "Der Computer lehnt ab. %1 gewinnt %2 Punkt(e)." },
+    ["%1 wins %2 point(s)."] = { fr = "%1 gagne %2 point(s).", es = "%1 gana %2 punto(s).", de = "%1 gewinnt %2 Punkt(e)." },
+    ["%1 wins %2 point(s)!"] = { fr = "%1 gagne %2 point(s) !", es = "¡%1 gana %2 punto(s)!", de = "%1 gewinnt %2 Punkt(e)!" },
+    ["%1 to play  Dice: %2  Stake: %3"] = { fr = "%1 à jouer  Dés : %2  Enjeu : %3", es = "%1 para jugar  Dados: %2  Apuesta: %3", de = "%1 am Zug  Würfel: %2  Einsatz: %3" },
+    ["%1 to play  Off W:%2 B:%3  Stake: %4"] = { fr = "%1 à jouer  Sortis B:%2 N:%3  Enjeu : %4", es = "%1 para jugar  Fuera B:%2 N:%3  Apuesta: %4", de = "%1 am Zug  Draußen W:%2 S:%3  Einsatz: %4" },
 }

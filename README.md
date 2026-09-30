@@ -16,6 +16,7 @@ The classic 2-player dice-and-checker race game, played pass-and-play on a singl
 
 ## Features
 
+- **Doubling cube** — offer before rolling; declining ends the game at the stake before the refused double
 - **Computer opponent** — optional, plays Black; enumerates every legal sequence the dice allow and scores the position each one leaves
 - **Opening roll** — each side rolls one die, the higher starts
 - **Full move validation** — legal moves only, including forced bar re-entry, doubles, and the obligation to use as many dice as possible (the higher one when only one can be played)

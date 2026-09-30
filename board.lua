@@ -53,6 +53,14 @@ function Backgammon:reset()
     self.winner         = nil
     self.opening_roll   = nil
     self.turn           = "white"
+
+    -- Doubling cube. value is the current stake multiplier (1, 2, 4 ... 64).
+    -- owner is the side that may double next: nil means the cube is in the
+    -- middle and either player may. pending_double is the colour of a player
+    -- who has offered and is waiting for an answer.
+    self.cube_value     = 1
+    self.cube_owner     = nil
+    self.pending_double = nil
 end
 
 -- Real backgammon does not simply give White the first move: each side rolls
@@ -519,6 +527,77 @@ function Backgammon:getAITurn()
 end
 
 -- ---------------------------------------------------------------------------
+-- Doubling cube
+--
+-- Offered before rolling, by whoever currently owns the cube (either player
+-- while it sits in the middle). Accepting doubles the stake and hands the cube
+-- to the accepter, who alone may double next. Declining ends the game there
+-- and then: the offerer wins what was already at stake, which is the whole
+-- point of the cube -- it lets a player bank a win rather than play it out.
+-- ---------------------------------------------------------------------------
+
+local MAX_CUBE = 64
+
+function Backgammon:canDouble(color)
+    color = color or self.turn
+    if self.status ~= "playing" then return false end
+    if self.pending_double then return false end
+    -- Only before rolling: a double mid-turn would be playing with the dice
+    -- already seen.
+    if #self.remaining_dice > 0 then return false end
+    if color ~= self.turn then return false end
+    if self.cube_value >= MAX_CUBE then return false end
+    return self.cube_owner == nil or self.cube_owner == color
+end
+
+function Backgammon:offerDouble(color)
+    color = color or self.turn
+    if not self:canDouble(color) then return false end
+    self.pending_double = color
+    return true
+end
+
+function Backgammon:acceptDouble()
+    if not self.pending_double then return false end
+    local offerer = self.pending_double
+    self.pending_double = nil
+    self.cube_value = self.cube_value * 2
+    -- The accepter now owns the cube and is the only one who may redouble.
+    self.cube_owner = otherColor(offerer)
+    return true
+end
+
+function Backgammon:declineDouble()
+    if not self.pending_double then return false end
+    local offerer = self.pending_double
+    self.pending_double = nil
+    self.status = "ended"
+    self.winner = offerer
+    self.declined = true
+    return true
+end
+
+-- What the finished game is worth: the cube's value, doubled for a gammon
+-- (the loser bore nothing off) and tripled for a backgammon (and still had a
+-- checker on the bar or in the winner's home board). A declined double is
+-- always worth the plain stake.
+function Backgammon:stake()
+    if self.status ~= "ended" or not self.winner then return self.cube_value end
+    if self.declined then return self.cube_value end
+
+    local loser = otherColor(self.winner)
+    if self.off[loser] > 0 then return self.cube_value end
+
+    local home = homeRange(self.winner)
+    if self.bar[loser] > 0 then return self.cube_value * 3 end
+    for p = home[1], home[2] do
+        local pt = self.points[p]
+        if pt.color == loser and pt.count > 0 then return self.cube_value * 3 end
+    end
+    return self.cube_value * 2
+end
+
+-- ---------------------------------------------------------------------------
 -- Persistence
 -- ---------------------------------------------------------------------------
 
@@ -539,6 +618,10 @@ function Backgammon:serialize()
         remaining_dice = remaining_out,
         status         = self.status,
         winner         = self.winner,
+        cube_value     = self.cube_value,
+        cube_owner     = self.cube_owner,
+        pending_double = self.pending_double,
+        declined       = self.declined,
     }
 end
 
@@ -579,6 +662,10 @@ function Backgammon:load(data)
     end
     self.status = data.status or "playing"
     self.winner = data.winner
+    self.cube_value     = data.cube_value or 1
+    self.cube_owner     = data.cube_owner
+    self.pending_double = data.pending_double
+    self.declined       = data.declined
     return true
 end
 
