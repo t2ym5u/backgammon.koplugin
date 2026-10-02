@@ -204,7 +204,7 @@ function BackgammonScreen:onDouble()
     local offerer = board.turn
     board:offerDouble(offerer)
     local stake = board.cube_value * 2
-    local label = (offerer == "white") and _("White") or _("Black")
+    local label = (offerer == "white") and _("White side") or _("Black side")
 
     -- Against the computer there is nobody to hand the dialog to: it answers.
     -- The rule is the simplest sound one -- take unless clearly behind in the
@@ -336,7 +336,7 @@ function BackgammonScreen:onCellAction(zone)
 
     if result == "won" then
         self:updateStatus()
-        local winner_label = board.winner == "white" and _("White") or _("Black")
+        local winner_label = board.winner == "white" and _("White side") or _("Black side")
         self:showMessage(T(_("%1 wins!"), winner_label), 4)
     elseif result == "turn_ended" then
         self:updateStatus(_("No more legal moves -- turn passed."))
@@ -360,10 +360,10 @@ function BackgammonScreen:updateStatus(msg)
     if msg then
         status = msg
     elseif self.board.status == "ended" then
-        local winner_label = self.board.winner == "white" and _("White") or _("Black")
+        local winner_label = self.board.winner == "white" and _("White side") or _("Black side")
         status = T(_("%1 wins %2 point(s)!"), winner_label, self.board:stake())
     else
-        local turn_label = self.board.turn == "white" and _("White") or _("Black")
+        local turn_label = self.board.turn == "white" and _("White side") or _("Black side")
         local cube = self.board.cube_value or 1
         if #self.board.remaining_dice > 0 then
             status = T(_("%1 to play  Dice: %2  Stake: %3"),
