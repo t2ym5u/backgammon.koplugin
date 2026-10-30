@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-10-30
+
+### Changed
+- Redesigned play screen. The board takes all the room the controls leave; in
+  landscape the status and the Roll dice / Double bar go beside it, or under
+  it whenever that gives the wide board more room. One edge around the board
+  instead of two.
+- The status line reads "White to play · Dice: 3,5 · Stake: 1" and wraps in
+  landscape instead of being cut off.
+- Once a game is over (all checkers borne off, or a double declined), the
+  action bar shows "New game" in place of Roll dice / Double.
+- The off-tray is split in two halves, black on top and white below, each
+  stacking one thin bar per borne-off checker with its count, instead of a
+  single "0/0" label.
+- When more than one checker of a colour waits on the bar, the count is drawn
+  on it.
+
+### Fixed
+- The count on a stack of more than five checkers was drawn on the bare point
+  beyond the stack, white on white for a black stack, so it was invisible; it
+  now sits on the outermost checker in its contrasting colour, fitted to it.
+
 ## [1.2.2] - 2026-10-02
 
 ### Fixed

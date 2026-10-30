@@ -8,8 +8,6 @@ local function lrequire(name)
 end
 
 local ButtonDialog    = require("ui/widget/buttondialog")
-local ButtonTable     = require("ui/widget/buttontable")
-local Device          = require("device")
 local FrameContainer  = require("ui/widget/container/framecontainer")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan  = require("ui/widget/horizontalspan")
@@ -25,7 +23,8 @@ local ScreenBase = require("screen_base")
 local BackgammonBoard       = lrequire("board")
 local BackgammonBoardWidget = lrequire("board_widget")
 
-local DeviceScreen = Device.screen
+-- Board height over width.
+local BOARD_ASPECT = 0.62
 
 local GAME_RULES_EN = _([[
 Backgammon — Rules (2-player pass-and-play)
@@ -127,13 +126,16 @@ function BackgammonScreen:maybeRunAI()
     end)
 end
 
+-- Bearing off all fifteen checkers, or a declined double, ends the game.
+function BackgammonScreen:isRoundOver()
+    return self.board.status ~= "playing"
+end
+
 function BackgammonScreen:serializeState()
     return self.board:serialize()
 end
 
 function BackgammonScreen:buildLayout()
-    local sw = DeviceScreen:getWidth()
-    local sh = DeviceScreen:getHeight()
     local is_landscape = self:isLandscape()
 
     local title_bar = self:buildTitleBar(_("Backgammon"), function()
@@ -144,8 +146,49 @@ function BackgammonScreen:buildLayout()
         }
     end)
 
-    local board_w = is_landscape and math.floor(sw * 0.85) or math.floor(sw * 0.94)
-    local board_h = math.floor(board_w * 0.62)
+    local function buildControls(width)
+        self.status_text:setMaxWidth(width)
+        return VerticalGroup:new{
+            align = "center",
+            self.status_text,
+            VerticalSpan:new{ width = Size.span.vertical_large },
+            self:buildActionBar({
+                { text = _("Roll dice"), callback = function() self:onRoll() end },
+                { id = "double_btn", text = _("Double"), callback = function() self:onDouble() end },
+            }, width),
+        }
+    end
+
+    -- The board is wider than tall (BOARD_ASPECT): fit it inside both sides
+    -- of the budget. The widget paints its own outer border, so the frame
+    -- only pads.
+    local frame_pad = Size.padding.default
+    local frame_extra = 2 * frame_pad
+    local function fitWidth(budget_w, budget_h)
+        return math.min(budget_w - frame_extra,
+                        math.floor((budget_h - frame_extra) / BOARD_ASPECT))
+    end
+
+    local controls = buildControls(self:getControlsWidth())
+    local board_w = fitWidth(self:getBoardBudget(title_bar, controls))
+
+    -- A side panel suits a square board; this one is so wide that, in
+    -- landscape, the panel would cost it far more width than the controls
+    -- cost it height underneath. Stack them whenever that gives more board.
+    local stacked = not is_landscape
+    if is_landscape then
+        local g = self:getGutter()
+        local full_w = self.dimen.w - 2 * g
+        local below = buildControls(full_w)
+        local stacked_w = fitWidth(full_w,
+            self.dimen.h - title_bar:getSize().h - below:getSize().h - 3 * g)
+        if stacked_w > board_w then
+            stacked, controls, board_w = true, below, stacked_w
+        else
+            controls = buildControls(self:getControlsWidth())
+        end
+    end
+    local board_h = math.floor(board_w * BOARD_ASPECT)
 
     self.board_widget = BackgammonBoardWidget:new{
         board        = self.board,
@@ -155,31 +198,24 @@ function BackgammonScreen:buildLayout()
     }
 
     local board_frame = FrameContainer:new{
-        padding = Size.padding.default,
-        margin  = Size.margin.default,
+        padding    = frame_pad,
+        margin     = 0,
+        bordersize = 0,
         self.board_widget,
     }
 
-    self.status_text:setMaxWidth(board_frame:getSize().w)
-
-    local roll_button = ButtonTable:new{
-        width = math.floor(sw * 0.6),
-        shrink_unneeded_width = true,
-        buttons = {{
-            { text = _("Roll dice"), callback = function() self:onRoll() end },
-            { id = "double_btn", text = _("Double"), callback = function() self:onDouble() end },
-        }},
-    }
-
-    local content = VerticalGroup:new{
-        align = "center",
-        board_frame,
-        VerticalSpan:new{ width = Size.span.vertical_default },
-        roll_button,
-        VerticalSpan:new{ width = Size.span.vertical_default },
-        self.status_text,
-    }
-    self:buildPortraitLayout(title_bar, content, nil)
+    if not stacked then
+        local content = HorizontalGroup:new{
+            align = "center",
+            board_frame,
+            HorizontalSpan:new{ width = self:getGutter() },
+            controls,
+        }
+        self:buildLandscapeLayout(title_bar, content)
+    else
+        self:buildPortraitLayout(title_bar, board_frame,
+            VerticalGroup:new{ align = "center", controls, VerticalSpan:new{ width = self:getGutter() } })
+    end
     self:updateStatus()
 end
 
@@ -363,17 +399,21 @@ function BackgammonScreen:updateStatus(msg)
         local winner_label = self.board.winner == "white" and _("White side") or _("Black side")
         status = T(_("%1 wins %2 point(s)!"), winner_label, self.board:stake())
     else
-        local turn_label = self.board.turn == "white" and _("White side") or _("Black side")
-        local cube = self.board.cube_value or 1
-        if #self.board.remaining_dice > 0 then
-            status = T(_("%1 to play  Dice: %2  Stake: %3"),
-                turn_label, table.concat(self.board.remaining_dice, ","), cube)
+        local board = self.board
+        local dice
+        if #board.remaining_dice > 0 then
+            dice = T(_("Dice: %1"), table.concat(board.remaining_dice, ","))
         else
-            status = T(_("%1 to play  Off W:%2 B:%3  Stake: %4"),
-                turn_label, self.board.off.white, self.board.off.black, cube)
+            dice = T(_("Off: W%1 B%2"), board.off.white, board.off.black)
         end
+        status = self:joinStatus(
+            board.turn == "white" and _("White to play") or _("Black to play"),
+            dice,
+            T(_("Stake: %1"), board.cube_value or 1))
     end
     ScreenBase.updateStatus(self, status)
+    -- Every move, roll and cube answer (player's or computer's) ends here.
+    self:refreshActionBar()
 end
 
 return BackgammonScreen

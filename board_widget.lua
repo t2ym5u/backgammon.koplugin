@@ -1,10 +1,13 @@
 local Blitbuffer     = require("ffi/blitbuffer")
+local Device         = require("device")
 local Font           = require("ui/font")
 local Geom           = require("ui/geometry")
 local GestureRange   = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local RenderText     = require("ui/rendertext")
 local UIManager      = require("ui/uimanager")
+
+local Screen = Device.screen
 
 local C_BG        = Blitbuffer.COLOR_WHITE
 local C_BORDER     = Blitbuffer.COLOR_BLACK
@@ -43,6 +46,25 @@ for col, p in ipairs(BOTTOM_ORDER) do POINT_COL[p] = col - 1; POINT_ROW[p] = "bo
 for col, p in ipairs(TOP_ORDER) do POINT_COL[p] = col - 1; POINT_ROW[p] = "top" end
 
 local MAX_VISIBLE_CHECKERS = 5
+local CHECKERS_PER_SIDE    = 15
+
+-- Largest cfont face (starting at `size`) whose "15" fits in max_w x max_h.
+local function fitFace(size, max_w, max_h)
+    local face
+    for sz = size, 6, -1 do
+        face = Font:getFace("cfont", sz)
+        local m = RenderText:sizeUtf8Text(0, 1000, face, "15", true, false)
+        if m.x <= max_w and (m.y_top + m.y_bottom) <= max_h then break end
+    end
+    return face
+end
+
+-- Draws `label` centred on (cx, cy) by its ink box.
+local function drawCentredLabel(bb, face, label, cx, cy, color)
+    local m = RenderText:sizeUtf8Text(0, 1000, face, label, true, false)
+    RenderText:renderUtf8Text(bb, math.floor(cx - m.x / 2),
+        math.floor(cy + (m.y_top - m.y_bottom) / 2), face, label, true, false, color)
+end
 
 function BackgammonBoardWidget:init()
     local w, h = self.width, self.height
@@ -57,8 +79,13 @@ function BackgammonBoardWidget:init()
     self.dimen = Geom:new{ w = w, h = h }
     self.paint_rect = Geom:new{ x = 0, y = 0, w = w, h = h }
 
-    local face_size = math.max(10, math.floor(self.col_w * 0.35))
-    self.label_face = Font:getFace("cfont", face_size)
+    -- Stack counts are drawn on top of a checker, off-tray counts inside
+    -- the narrow tray: shrink each face until a two-digit count fits.
+    -- Font:getFace scales its size by DPI; this one is derived from pixels.
+    local face_size = math.max(10, math.floor(self.col_w * 0.35 / (Screen:scaleBySize(1000) / 1000)))
+    self.label_face = fitFace(face_size, math.floor(self.checker_r * 1.5),
+        math.floor(self.checker_r * 1.3))
+    self.off_face   = fitFace(face_size, math.floor(self.off_w * 0.7), math.floor(self.height * 0.05))
 
     self.ges_events = {
         Tap = {
@@ -155,14 +182,40 @@ function BackgammonBoardWidget:_drawPoint(bb, x, y, point, col)
             drawChecker(bb, cx, cy, self.checker_r, pt.color, is_sel)
         end
         if pt.count > MAX_VISIBLE_CHECKERS then
-            local label = tostring(pt.count)
-            local m = RenderText:sizeUtf8Text(0, w, self.label_face, label, true, false)
-            local tx = math.floor(cx - m.x / 2)
-            local ty = math.floor(top and (y + h - m.y_bottom - 2) or (y + 2 - m.y_top))
+            -- Count goes on the outermost visible checker, in its
+            -- contrasting colour (drawn on the bare point, white-on-white
+            -- for a black stack, it was invisible).
+            local cy = math.floor(top and (y + self.checker_r + (n - 1) * step)
+                            or (y + h - self.checker_r - (n - 1) * step))
             local tc = (pt.color == "white") and C_BLACK_CHECKER or C_WHITE_CHECKER
-            RenderText:renderUtf8Text(bb, tx, ty + m.y_top, self.label_face, label, true, false, tc)
+            drawCentredLabel(bb, self.label_face, tostring(pt.count), cx, cy, tc)
         end
     end
+end
+
+-- One half of the off-tray: a thin bar per borne-off checker, stacked from
+-- the tray's outer edge inward, with the count just inside the centre line.
+function BackgammonBoardWidget:_drawOffHalf(bb, x, y, h, count, color, top)
+    local pad     = math.max(2, math.floor(self.off_w * 0.12))
+    local face    = self.off_face
+    local m       = RenderText:sizeUtf8Text(0, 1000, face, "15", true, false)
+    local label_h = m.y_top + m.y_bottom + 2 * pad
+    local step    = math.max(2, math.floor((h - label_h - pad) / CHECKERS_PER_SIDE))
+    local tile_h  = math.max(1, step - math.max(1, math.floor(step * 0.25)))
+    local tile_w  = self.off_w - 2 * pad
+    for i = 1, math.min(count, CHECKERS_PER_SIDE) do
+        local ty = top and (y + pad + (i - 1) * step) or (y + h - pad - i * step + (step - tile_h))
+        if color == "white" then
+            bb:paintRect(x + pad, ty, tile_w, tile_h, C_CHECKER_EDGE)
+            if tile_h > 2 then
+                bb:paintRect(x + pad + 1, ty + 1, tile_w - 2, tile_h - 2, C_WHITE_CHECKER)
+            end
+        else
+            bb:paintRect(x + pad, ty, tile_w, tile_h, C_BLACK_CHECKER)
+        end
+    end
+    local label_cy = top and (y + h - label_h / 2) or (y + label_h / 2)
+    drawCentredLabel(bb, face, tostring(count), x + self.off_w / 2, label_cy, C_BORDER)
 end
 
 function BackgammonBoardWidget:paintTo(bb, x, y)
@@ -182,21 +235,30 @@ function BackgammonBoardWidget:paintTo(bb, x, y)
     local bar_x = x + self.board_x0 + 6 * self.col_w
     bb:paintRect(bar_x, y, self.bar_w, self.height, C_BAR)
     local bar_cx = math.floor(bar_x + self.bar_w / 2)
-    if board.bar.white > 0 then
-        drawChecker(bb, bar_cx, math.floor(y + self.height * 0.7), self.checker_r,
-            "white", board.selected and board.selected.from == "bar" and board.turn == "white")
-    end
-    if board.bar.black > 0 then
-        drawChecker(bb, bar_cx, math.floor(y + self.height * 0.3), self.checker_r,
-            "black", board.selected and board.selected.from == "bar" and board.turn == "black")
+    -- Only one checker per colour is drawn on the bar; a count on it says
+    -- how many are actually waiting to re-enter.
+    for _, side in ipairs({ { "white", 0.7 }, { "black", 0.3 } }) do
+        local color, cnt = side[1], board.bar[side[1]]
+        if cnt > 0 then
+            local cy = math.floor(y + self.height * side[2])
+            drawChecker(bb, bar_cx, cy, self.checker_r, color,
+                board.selected and board.selected.from == "bar" and board.turn == color)
+            if cnt > 1 then
+                drawCentredLabel(bb, self.label_face, tostring(cnt), bar_cx, cy,
+                    color == "white" and C_BLACK_CHECKER or C_WHITE_CHECKER)
+            end
+        end
     end
 
-    -- Off-trays
-    bb:paintRect(x + self.width - self.off_w, y, self.off_w, self.height, C_OFF_TRAY)
-    local off_label = tostring(board.off.black) .. "/" .. tostring(board.off.white)
-    local m = RenderText:sizeUtf8Text(0, self.off_w, self.label_face, off_label, true, false)
-    RenderText:renderUtf8Text(bb, math.floor(x + self.width - self.off_w + math.max(0, (self.off_w - m.x) / 2)),
-        math.floor(y + self.height / 2) + m.y_top, self.label_face, off_label, true, false, C_BORDER)
+    -- Off-trays: black bears off top-right, white bottom-right. Kept inside
+    -- the outer border (1px on each edge) so neither touches the frame.
+    local off_x = x + self.width - self.off_w - 1
+    local half  = math.floor((self.height - 2) / 2)
+    bb:paintRect(off_x, y + 1, self.off_w, self.height - 2, C_OFF_TRAY)
+    bb:paintRect(off_x, y + 1 + half, self.off_w, 1, C_BORDER)
+    self:_drawOffHalf(bb, off_x, y + 1, half, board.off.black, "black", true)
+    self:_drawOffHalf(bb, off_x, y + 1 + half + 1, self.height - 2 - half - 1,
+        board.off.white, "white", false)
 
     -- Outer border
     bb:paintRect(x, y, self.width, 1, C_BORDER)
