@@ -1,6 +1,9 @@
 return {
-    ["%1 to play  Dice: %2"] = { fr = "%1 à jouer  Dés : %2", es = "%1 para jugar  Dados: %2", de = "%1 am Zug  Würfel: %2" },
-    ["%1 to play  Off W:%2 B:%3"] = { fr = "%1 à jouer  Sortis B:%2 N:%3", es = "%1 para jugar  Fuera B:%2 N:%3", de = "%1 am Zug  Draußen W:%2 S:%3" },
+    ["Black to play"] = { fr = "Noir à jouer", es = "Juega Negro", de = "Schwarz am Zug" },
+    ["White to play"] = { fr = "Blanc à jouer", es = "Juega Blanco", de = "Weiß am Zug" },
+    ["Dice: %1"] = { fr = "Dés : %1", es = "Dados: %1", de = "Würfel: %1" },
+    ["Off: W%1 B%2"] = { fr = "Sortis : B%1 N%2", es = "Fuera: B%1 N%2", de = "Draußen: W%1 S%2" },
+    ["Stake: %1"] = { fr = "Enjeu : %1", es = "Apuesta: %1", de = "Einsatz: %1" },
     ["%1 wins!"] = { fr = "%1 gagne !", es = "¡%1 gana!", de = "%1 gewinnt!" },
     ["Backgammon"] = { fr = "Backgammon", es = "Backgammon", de = "Backgammon" },
     ["Black side"] = { fr = "Noir", es = "Negro", de = "Schwarz" },
@@ -32,6 +35,4 @@ return {
     ["The computer declines. %1 wins %2 point(s)."] = { fr = "L'ordinateur refuse. %1 gagne %2 point(s).", es = "El ordenador rechaza. %1 gana %2 punto(s).", de = "Der Computer lehnt ab. %1 gewinnt %2 Punkt(e)." },
     ["%1 wins %2 point(s)."] = { fr = "%1 gagne %2 point(s).", es = "%1 gana %2 punto(s).", de = "%1 gewinnt %2 Punkt(e)." },
     ["%1 wins %2 point(s)!"] = { fr = "%1 gagne %2 point(s) !", es = "¡%1 gana %2 punto(s)!", de = "%1 gewinnt %2 Punkt(e)!" },
-    ["%1 to play  Dice: %2  Stake: %3"] = { fr = "%1 à jouer  Dés : %2  Enjeu : %3", es = "%1 para jugar  Dados: %2  Apuesta: %3", de = "%1 am Zug  Würfel: %2  Einsatz: %3" },
-    ["%1 to play  Off W:%2 B:%3  Stake: %4"] = { fr = "%1 à jouer  Sortis B:%2 N:%3  Enjeu : %4", es = "%1 para jugar  Fuera B:%2 N:%3  Apuesta: %4", de = "%1 am Zug  Draußen W:%2 S:%3  Einsatz: %4" },
 }
