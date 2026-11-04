@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-11-04
+
+### Changed
+- The computer's turn is worked out about 90 times faster: a double on a
+  busy board took up to 0.65 s on a desktop (around 15 s on a Kobo); it now
+  takes under 0.01 s (a fraction of a second on a Kobo). It plays exactly
+  the same moves as before (checked on 4,700 positions).
+- Your own moves with a double are also instant again: finding the legal
+  moves could take most of a second on a desktop (20 s on a Kobo).
+- "AI is thinking..." is shown while the computer plans its turn, like in
+  the other games; the turn is planned once and then played move by move.
+
 ## [1.3.3] - 2026-11-03
 
 ### Changed
