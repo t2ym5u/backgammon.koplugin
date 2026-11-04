@@ -352,5 +352,49 @@ describe("doubling cube", function()
         b.bar = { white = 0, black = 1 }
         assert.are.equal(6, b:stake())
     end)
+
+    describe("getAITurn", function()
+        it("plays whole legal turns quickly, doubles included", function()
+            local worst = 0
+            for g = 1, 12 do
+                math.randomseed(g * 101)
+                local b = fresh()
+                b:rollOpening()
+                local turns = 0
+                while b.status == "playing" and turns < 300 do
+                    turns = turns + 1
+                    if #b.remaining_dice == 0 then b:rollDice() end
+                    if b.status ~= "playing" then break end
+                    local t0 = os.clock()
+                    local seq = b:getAITurn()
+                    worst = math.max(worst, os.clock() - t0)
+                    local mover = b.turn
+                    for _, mv in ipairs(seq) do
+                        assert.are_not.equal("invalid", b:applyMove(mv.from, mv.die))
+                    end
+                    -- The turn used every die it could: nothing is left over.
+                    if b.status == "playing" and b.turn == mover then
+                        assert.is_false(b:hasAnyLegalMove() and #b.remaining_dice > 0)
+                        b:endTurn()
+                    end
+                end
+            end
+            -- Used to reach 0.65 s on a desktop with doubles; now ~0.01 s.
+            assert.is_true(worst < 0.15)
+        end)
+
+        it("bears off its last checker with the higher die", function()
+            local b = fresh()
+            for p = 1, 24 do b.points[p] = { color = nil, count = 0 } end
+            b.points[23] = { color = "black", count = 1 }
+            b.off.black = 14
+            b.turn = "black"
+            b.remaining_dice = { 3, 4 }
+            local seq = b:getAITurn()
+            assert.are.equal(1, #seq)
+            assert.are.equal(23, seq[1].from)
+            assert.are.equal(4, seq[1].die)
+        end)
+    end)
 end)
 

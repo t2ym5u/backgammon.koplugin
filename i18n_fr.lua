@@ -21,6 +21,7 @@ return {
     ["The computer now plays Black."] = { fr = "L'ordinateur joue désormais les Noirs.", es = "El ordenador juega ahora con negras.", de = "Der Computer spielt jetzt Schwarz." },
     ["Two players on one device."] = { fr = "Deux joueurs sur le même appareil.", es = "Dos jugadores en el mismo dispositivo.", de = "Zwei Spieler auf einem Gerät." },
     ["Computer rolled %1-%2."] = { fr = "L'ordinateur a fait %1-%2.", es = "El ordenador sacó %1-%2.", de = "Der Computer würfelte %1-%2." },
+    ["AI is thinking..."] = { fr = "L'IA réfléchit...", es = "La IA está pensando...", de = "KI denkt nach..." },
 
     -- Doubling cube (screen.lua :onDouble)
     ["Double"] = { fr = "Doubler", es = "Doblar", de = "Verdoppeln" },

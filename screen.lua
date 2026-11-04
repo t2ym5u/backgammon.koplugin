@@ -86,12 +86,29 @@ function BackgammonScreen:toggleOpponent()
     self:maybeRunAI()
 end
 
-function BackgammonScreen:maybeRunAI()
+-- What the AI planned for the rest of its turn, valid only while the board
+-- is exactly where the plan left it (an undo, a load or a new game changes
+-- that and the turn is simply planned again).
+local function planKey(board)
+    return board:_positionKey() .. "#" .. table.concat(board.remaining_dice, ",") .. board.turn
+end
+
+-- `rolled`: the "Computer rolled ..." line to keep on screen while it thinks.
+function BackgammonScreen:maybeRunAI(rolled)
     local board = self.board
     if not self:isSolo() then return end
     if board.status ~= "playing" or board.turn ~= AI_COLOR then return end
     if self.ai_thinking then return end
     self.ai_thinking = true
+
+    local plan = self.ai_plan
+    if plan and plan.key ~= planKey(board) then plan, self.ai_plan = nil, nil end
+    if #board.remaining_dice > 0 and not plan then
+        -- The whole turn is searched before the first move (a fraction of
+        -- a second on an e-reader, a little more with doubles).
+        self:updateStatus(rolled and self:joinStatus(rolled, _("AI is thinking..."))
+                          or _("AI is thinking..."))
+    end
 
     UIManager:scheduleIn(AI_MOVE_DELAY, function()
         if board.status ~= "playing" or board.turn ~= AI_COLOR then
@@ -99,24 +116,36 @@ function BackgammonScreen:maybeRunAI()
             return
         end
         if #board.remaining_dice == 0 then
+            self.ai_plan = nil
             local dice = board:rollDice()
             self.board_widget:refresh()
-            if dice then
-                self:updateStatus(T(_("Computer rolled %1-%2."), dice[1], dice[2]))
-            end
             self.ai_thinking = false
-            self:maybeRunAI()
+            if dice then
+                local msg = T(_("Computer rolled %1-%2."), dice[1], dice[2])
+                self:updateStatus(msg)
+                self:maybeRunAI(msg)
+            else
+                self:maybeRunAI()
+            end
             return
         end
 
-        local turn = board:getAITurn()
-        if #turn == 0 then
+        local moves = plan and plan.moves
+        if not moves then moves = board:getAITurn() end
+        self.ai_plan = nil
+        if #moves == 0 then
             board:endTurn()
         else
             -- Apply only the first move here and come back for the rest, so
             -- each one gets its own refresh.
-            local mv = turn[1]
-            if board:applyMove(mv.from, mv.die) == "invalid" then board:endTurn() end
+            local mv = moves[1]
+            if board:applyMove(mv.from, mv.die) == "invalid" then
+                board:endTurn()
+            elseif #moves > 1 and board.turn == AI_COLOR then
+                local rest = {}
+                for i = 2, #moves do rest[#rest + 1] = moves[i] end
+                self.ai_plan = { moves = rest, key = planKey(board) }
+            end
         end
         self.board_widget:refresh()
         self.plugin:saveState(self.board:serialize())

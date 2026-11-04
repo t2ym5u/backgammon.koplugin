@@ -248,21 +248,33 @@ end
 
 -- Greatest number of the remaining dice playable from here, and the largest
 -- die that can start such a sequence.
+--
+-- Stops at the first sequence that plays every die: nothing can beat it, and
+-- the "largest die" answer only matters when a single die is playable (with
+-- one die left, any die that plays is that die). Without this, a double on a
+-- busy board searched every ordering of four moves -- most of a second on a
+-- desktop, tens of seconds on an e-reader, for each legal-move query.
 function Backgammon:_maxPlayable()
     local best_count, best_die = 0, nil
     local snap = self:_snapshot()
     -- Iterate a copy: the body mutates self.remaining_dice on the way down.
     local dice = {}
     for i, d in ipairs(self.remaining_dice) do dice[i] = d end
+    local all = #dice
+    local tried = {}
     for idx, die in ipairs(dice) do
-        local moves = self:_rawLegalMoves(die)
-        for _, m in ipairs(moves) do
-            self:_applyRaw(m, idx)
-            local deeper = self:_maxPlayable()
-            self:_restore(snap)
-            local total = 1 + deeper
-            if total > best_count or (total == best_count and die > (best_die or 0)) then
-                best_count, best_die = total, die
+        if not tried[die] then           -- identical dice give identical branches
+            tried[die] = true
+            local moves = self:_rawLegalMoves(die)
+            for _, m in ipairs(moves) do
+                self:_applyRaw(m, idx)
+                local deeper = self:_maxPlayable()
+                self:_restore(snap)
+                local total = 1 + deeper
+                if total > best_count or (total == best_count and die > (best_die or 0)) then
+                    best_count, best_die = total, die
+                end
+                if best_count == all and all > 1 then return best_count, best_die end
             end
         end
     end
@@ -454,46 +466,24 @@ function Backgammon:evaluateFor(color)
     return score
 end
 
--- Every distinct sequence of moves the remaining dice allow, as a list of
--- { moves = { {from=, die=}, ... }, score = }. Sequences that reach the same
--- position are collapsed, which is what keeps doubles (four dice) tractable.
+-- Every distinct turn the remaining dice allow, best first by score.
+--
+-- The search plays raw moves (no use-as-many-dice filter) depth first, and
+-- only afterwards keeps the complete turns the rules allow: the ones that use
+-- the most dice, and with a single die playable, the higher one. That is the
+-- same set, met in the same order, as walking getLegalMoves() at every step
+-- -- but getLegalMoves() re-solves "how many dice can still be played" for
+-- every candidate at every step, which made a double cost hundreds of ms on
+-- a desktop (seconds on an e-reader). Two more savings:
+--   * a position already reached with the same dice left is not searched
+--     again (with doubles, the same four checker moves in any order);
+--   * moves are applied and undone in place instead of snapshotting the
+--     whole board around each one.
+-- Turns that reach the same position are collapsed; MAX_SEQUENCES caps how
+-- many are scored, as before.
 local MAX_SEQUENCES = 4000
-
-function Backgammon:_enumerateTurns(color, seen, acc, path, budget)
-    if budget.n >= MAX_SEQUENCES then return end
-
-    local any = false
-    local snap = self:_snapshot()
-    local dice = {}
-    for i, d in ipairs(self.remaining_dice) do dice[i] = d end
-
-    local tried = {}
-    for idx, die in ipairs(dice) do
-        if not tried[die] then           -- identical dice give identical branches
-            tried[die] = true
-            for _, m in ipairs(self:getLegalMoves(die)) do
-                any = true
-                self:_applyRaw(m, idx)
-                path[#path + 1] = { from = m.from, die = die }
-                self:_enumerateTurns(color, seen, acc, path, budget)
-                path[#path] = nil
-                self:_restore(snap)
-            end
-        end
-    end
-
-    if not any then
-        -- Nothing further can be played: this is a complete turn.
-        local key = self:_positionKey()
-        if not seen[key] then
-            seen[key] = true
-            local moves = {}
-            for i, mv in ipairs(path) do moves[i] = { from = mv.from, die = mv.die } end
-            acc[#acc + 1] = { moves = moves, score = self:evaluateFor(color) }
-            budget.n = budget.n + 1
-        end
-    end
-end
+-- Safety net on the positions visited; never reached in measured games.
+local MAX_STATES = 60000
 
 function Backgammon:_positionKey()
     local parts = {}
@@ -506,6 +496,99 @@ function Backgammon:_positionKey()
     return table.concat(parts, "|")
 end
 
+-- Plays `move` for self.turn without rule checks; returns what undoMove_
+-- needs. Only the AI search below uses it.
+function Backgammon:_doMove(move)
+    local color = self.turn
+    if move.from == "bar" then
+        self.bar[color] = self.bar[color] - 1
+    else
+        local src = self.points[move.from]
+        src.count = src.count - 1
+        if src.count == 0 then src.color = nil end
+    end
+    local hit = false
+    if move.to == "off" then
+        self.off[color] = self.off[color] + 1
+    else
+        local dest = self.points[move.to]
+        if dest.count == 1 and dest.color ~= nil and dest.color ~= color then
+            self.bar[dest.color] = self.bar[dest.color] + 1
+            dest.color = color
+            hit = true
+        else
+            dest.color = color
+            dest.count = dest.count + 1
+        end
+    end
+    return hit
+end
+
+function Backgammon:_undoMove(move, hit)
+    local color = self.turn
+    if move.to == "off" then
+        self.off[color] = self.off[color] - 1
+    else
+        local dest = self.points[move.to]
+        if hit then
+            local opp = otherColor(color)
+            self.bar[opp] = self.bar[opp] - 1
+            dest.color = opp          -- count stays 1: the hit blot is back
+        else
+            dest.count = dest.count - 1
+            if dest.count == 0 then dest.color = nil end
+        end
+    end
+    if move.from == "bar" then
+        self.bar[color] = self.bar[color] + 1
+    else
+        local src = self.points[move.from]
+        src.count = src.count + 1
+        src.color = color
+    end
+end
+
+function Backgammon:_enumerateTurns(color, st, path)
+    local dice = self.remaining_dice
+    local key = self:_positionKey() .. "#" .. table.concat(dice, ",")
+    if st.visited[key] or st.states >= MAX_STATES then return end
+    st.visited[key] = true
+    st.states = st.states + 1
+
+    local any = false
+    local tried = {}
+    for idx = 1, #dice do
+        local die = dice[idx]
+        if not tried[die] then           -- identical dice give identical branches
+            tried[die] = true
+            for _, m in ipairs(self:_rawLegalMoves(die)) do
+                any = true
+                local hit = self:_doMove(m)
+                table.remove(dice, idx)
+                path[#path + 1] = { from = m.from, die = die }
+                self:_enumerateTurns(color, st, path)
+                path[#path] = nil
+                table.insert(dice, idx, die)
+                self:_undoMove(m, hit)
+            end
+        end
+    end
+
+    if not any then
+        -- Nothing further can be played: a complete turn, if the rules keep
+        -- it (decided once all are known, see getAITurn).
+        -- Not collapsed here yet: which of two turns reaching the same
+        -- position the rules keep (e.g. bearing off with the higher die)
+        -- is only known at the end.
+        local n = #path
+        local moves = {}
+        for i, mv in ipairs(path) do moves[i] = { from = mv.from, die = mv.die } end
+        st.acc[#st.acc + 1] = { moves = moves, score = self:evaluateFor(color), n = n,
+                                key = self:_positionKey() }
+        if n > st.max_n then st.max_n = n end
+    end
+end
+
 -- The whole turn, as an ordered list of { from = "bar"|1..24, die = n } ready
 -- to feed back into applyMove(). Empty when the dice allow nothing.
 function Backgammon:getAITurn()
@@ -513,17 +596,29 @@ function Backgammon:getAITurn()
     if #self.remaining_dice == 0 then return {} end
 
     local color = self.turn
-    local seen, acc, budget = {}, {}, { n = 0 }
-    local snap = self:_snapshot()
-    self:_enumerateTurns(color, seen, acc, {}, budget)
-    self:_restore(snap)
+    local st = { visited = {}, acc = {}, states = 0, max_n = 0 }
+    self:_enumerateTurns(color, st, {})
+    if st.max_n == 0 then return {} end
 
-    if #acc == 0 then return {} end
-    local best = acc[1]
-    for i = 2, #acc do
-        if acc[i].score > best.score then best = acc[i] end
+    -- Only one die playable: it must be the highest one that can be.
+    local need_die = nil
+    if st.max_n == 1 then
+        for _, t in ipairs(st.acc) do
+            if t.n == 1 and t.moves[1].die > (need_die or 0) then need_die = t.moves[1].die end
+        end
     end
-    return best.moves
+
+    local best, kept, seen = nil, 0, {}
+    for _, t in ipairs(st.acc) do
+        if t.n == st.max_n and (not need_die or t.moves[1].die == need_die)
+           and not seen[t.key] then
+            seen[t.key] = true
+            kept = kept + 1
+            if kept > MAX_SEQUENCES then break end
+            if not best or t.score > best.score then best = t end
+        end
+    end
+    return best and best.moves or {}
 end
 
 -- ---------------------------------------------------------------------------
