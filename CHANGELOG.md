@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.4] - 2026-11-18
+
+### Fixed
+- Tapping a checker shows the selection at once.
+
 ## [1.4.3] - 2026-11-12
 
 ### Changed

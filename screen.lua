@@ -118,7 +118,7 @@ function BackgammonScreen:maybeRunAI(rolled)
         if #board.remaining_dice == 0 then
             self.ai_plan = nil
             local dice = board:rollDice()
-            self.board_widget:refresh()
+            self.board_widget:refresh(self)
             self.ai_thinking = false
             if dice then
                 local msg = T(_("Computer rolled %1-%2."), dice[1], dice[2])
@@ -147,7 +147,7 @@ function BackgammonScreen:maybeRunAI(rolled)
                 self.ai_plan = { moves = rest, key = planKey(board) }
             end
         end
-        self.board_widget:refresh()
+        self.board_widget:refresh(self)
         self.plugin:saveState(self.board:serialize())
         self:updateStatus()
         self.ai_thinking = false
@@ -326,7 +326,7 @@ function BackgammonScreen:onRoll()
     end
 
     local dice = board:rollDice()
-    self.board_widget:refresh()
+    self.board_widget:refresh(self)
     self.plugin:saveState(self:serializeState())
 
     if not dice then
@@ -355,13 +355,13 @@ function BackgammonScreen:onCellAction(zone)
         if zone == "bar" then
             if board.bar[board.turn] > 0 then
                 board.selected = { from = "bar" }
-                self.board_widget:refresh()
+                self.board_widget:refresh(self)
             end
         elseif type(zone) == "number" then
             local pt = board.points[zone]
             if pt.color == board.turn and pt.count > 0 then
                 board.selected = { from = zone }
-                self.board_widget:refresh()
+                self.board_widget:refresh(self)
             end
         end
         return
@@ -370,7 +370,7 @@ function BackgammonScreen:onCellAction(zone)
     local sel_from = board.selected.from
     if zone == sel_from then
         board.selected = nil
-        self.board_widget:refresh()
+        self.board_widget:refresh(self)
         return
     end
 
@@ -390,13 +390,13 @@ function BackgammonScreen:onCellAction(zone)
     board.selected = nil
 
     if not applied_die then
-        self.board_widget:refresh()
+        self.board_widget:refresh(self)
         self:updateStatus(_("Invalid move."))
         return
     end
 
     local result = board:applyMove(sel_from, applied_die)
-    self.board_widget:refresh()
+    self.board_widget:refresh(self)
     self.plugin:saveState(self:serializeState())
 
     if result == "won" then

@@ -134,9 +134,11 @@ function BackgammonBoardWidget:onTap(_, ges)
     return true
 end
 
-function BackgammonBoardWidget:refresh()
+-- `parent` is the screen: UIManager only repaints top-level widgets, so
+-- marking this widget itself dirty would refresh the old pixels.
+function BackgammonBoardWidget:refresh(parent)
     local rect = self.paint_rect
-    UIManager:setDirty(self, function()
+    UIManager:setDirty(parent or self, function()
         return "ui", Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }
     end)
 end
