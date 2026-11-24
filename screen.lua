@@ -53,9 +53,12 @@ function BackgammonScreen:init()
     self.board = BackgammonBoard:new()
     if not self.board:load(state) then
         self.board:reset()
-    self.board:rollOpening()
+        self.board:rollOpening()
     end
     ScreenBase.init(self)
+    -- A saved game may reopen on the computer's turn, and a first opening
+    -- roll may hand it the move: nothing else would start it.
+    self:maybeRunAI()
 end
 
 -- ---------------------------------------------------------------------------
@@ -110,8 +113,9 @@ function BackgammonScreen:maybeRunAI(rolled)
                           or _("AI is thinking..."))
     end
 
-    UIManager:scheduleIn(AI_MOVE_DELAY, function()
-        if board.status ~= "playing" or board.turn ~= AI_COLOR then
+    self:schedule(AI_MOVE_DELAY, function()
+        -- Re-checked: the opponent may have been switched to a human meanwhile.
+        if not self:isSolo() or board.status ~= "playing" or board.turn ~= AI_COLOR then
             self.ai_thinking = false
             return
         end
@@ -412,6 +416,9 @@ function BackgammonScreen:onCellAction(zone)
 end
 
 function BackgammonScreen:onNewGame()
+    self:cancelScheduled()  -- an AI move still pending belongs to the old game
+    self.ai_thinking = false
+    self.ai_plan = nil
     self.board:reset()
     self.board:rollOpening()
     self.plugin:saveState(self.board:serialize())
